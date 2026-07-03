@@ -23,7 +23,6 @@ import java.lang.classfile.instruction.TypeCheckInstruction;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.ConstantDesc;
 import java.lang.constant.MethodTypeDesc;
-import java.lang.classfile.constantpool.StringEntry;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -161,7 +160,7 @@ final class BodyRenderer {
     }
 
     private void indy(InvokeDynamicInstruction indy) {
-        String bsmOwner = indy.bootstrapMethod().asSymbol().owner().descriptorString();
+        String bsmOwner = indy.bootstrapMethod().owner().descriptorString();
         int argc = indy.typeSymbol().parameterCount();
         if (bsmOwner.equals("Ljava/lang/invoke/StringConcatFactory;")) {
             List<Expr> args = popArgs(argc);
@@ -182,8 +181,8 @@ final class BodyRenderer {
             recipe = r.toString();
         } else {
             var bootstrapArgs = indy.bootstrapArgs();
-            if (bootstrapArgs.isEmpty() || !(bootstrapArgs.get(0) instanceof StringEntry s)) throw new Bail();
-            recipe = s.stringValue();
+            if (bootstrapArgs.isEmpty() || !(bootstrapArgs.get(0) instanceof String s)) throw new Bail();
+            recipe = s;
         }
         List<String> parts = new ArrayList<>();
         StringBuilder lit = new StringBuilder();
