@@ -7,7 +7,6 @@ import java.lang.classfile.ClassModel;
 import java.lang.classfile.CodeElement;
 import java.lang.classfile.CodeModel;
 import java.lang.classfile.MethodModel;
-import java.lang.classfile.instruction.InvokeInstruction;
 import java.lang.classfile.instruction.LineNumber;
 import java.lang.classfile.instruction.LocalVariable;
 import java.lang.constant.MethodTypeDesc;
@@ -16,10 +15,8 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -34,6 +31,7 @@ public final class LambdaCrackerRuntime {
     // PoC: strong keys pin lambda classes against unloading; see PLAN.md follow-ups.
     private static final Map<Class<?>, Description> CACHE = new ConcurrentHashMap<>();
     private static final int MAX_VALUE_LEN = 60;
+    private static final int MAX_BYTECODE_LEN = 160;
 
     public static String render(Object lambda, String meta) {
         int[] depth = DEPTH.get();
@@ -135,7 +133,12 @@ public final class LambdaCrackerRuntime {
                 }
 
                 String rendered = BodyRenderer.render(code, names);
-                body = rendered != null ? rendered : "…" + callSummary(code);
+                if (rendered != null) {
+                    body = rendered;
+                } else {
+                    String bytecode = BodyRenderer.textify(code, names);
+                    body = bytecode != null ? "«bytecode» " + truncate(bytecode, MAX_BYTECODE_LEN) : "…";
+                }
             }
 
             StringBuilder p = new StringBuilder();
@@ -212,18 +215,8 @@ public final class LambdaCrackerRuntime {
             return names;
         }
 
-        private static String callSummary(CodeModel code) {
-            Set<String> calls = new LinkedHashSet<>();
-            for (CodeElement e : code.elementList()) {
-                if (calls.size() == 3) break;
-                if (e instanceof InvokeInstruction inv) {
-                    String n = inv.name().stringValue();
-                    String o = inv.owner().asInternalName();
-                    if (n.equals("<init>") || n.equals("valueOf") || o.equals("scala/runtime/BoxesRunTime")) continue;
-                    calls.add(n);
-                }
-            }
-            return calls.isEmpty() ? "" : " calls " + String.join(", ", calls);
+        private static String truncate(String s, int max) {
+            return s.length() > max ? s.substring(0, max - 1) + "…" : s;
         }
 
         private static String paramList(List<String> params) {

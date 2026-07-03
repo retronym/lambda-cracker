@@ -20,16 +20,22 @@ public class JavaDemo {
         BiFunction<Integer, Integer, Integer> max = Math::max;
         Supplier<ArrayList<String>> ctor = ArrayList::new;
         Runnable multi = () -> { int a = offset * 2; System.out.println(a); };
+        Function<Integer, Integer> factorial = n -> {
+            int r = 1;
+            for (int i = 2; i <= n; i++) r *= i;
+            return r;
+        };
 
         Map<String, Object> cases = new LinkedHashMap<>();
         cases.put("single-expression closure over a local variable", add);
-        cases.put("boolean predicate (comparison bails to call summary)", longish);
+        cases.put("boolean predicate (comparison bails to bytecode)", longish);
         cases.put("zero-arg supplier, constant body", constant);
         cases.put("closure over a local variable, string concat", label);
         cases.put("unbound instance method reference", ref);
         cases.put("static method reference", max);
         cases.put("constructor reference", ctor);
-        cases.put("multi-statement Runnable (bails to call summary)", multi);
+        cases.put("multi-statement Runnable (bails to bytecode)", multi);
+        cases.put("loop body — hard case (bails to bytecode)", factorial);
 
         for (Map.Entry<String, Object> e : cases.entrySet())
             System.out.printf("  %-64s -> %s%n", e.getKey(), e.getValue());

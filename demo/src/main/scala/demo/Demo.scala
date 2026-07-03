@@ -21,18 +21,21 @@ object Demo:
     val multiStatement: Int => Int = x =>
       val doubled = x * 2
       doubled + offset
+    val classify: String => String = s =>
+      if s.isEmpty then "empty" else "non-empty"
 
     val cases = List(
       "single-expression closure over a local val" -> f,
       "two-arg lambda, arithmetic body" -> g,
-      "boolean-returning predicate (comparison bails to call summary)" -> pred,
+      "boolean-returning predicate (comparison bails to bytecode)" -> pred,
       "string interpolation body" -> greet,
       "zero-arg supplier" -> thunk,
       "Runnable / side-effecting lambda" -> effect,
       "instance method turned into a function value" -> h,
       "curried lambda, outer function" -> nested,
       "curried lambda, applied once (captures x=1)" -> nested(1),
-      "multi-statement body (bails to call summary)" -> multiStatement,
+      "multi-statement body (bails to bytecode)" -> multiStatement,
+      "if/else body — hard case (bails to bytecode)" -> classify,
     )
 
     println("-- Scala 3 --")

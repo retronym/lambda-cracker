@@ -68,7 +68,7 @@ The spin-time hook injects only the marker field and a trampoline `toString`. Al
 ### 3. Three rendering tiers, each a fallback for the one above
 
 1. **Origin** (always, needs only the marker field + name demangling): source file, line of the impl method's first `LineNumberTable` entry, enclosing class and demangled method name.
-2. **Body reconstruction** (default): a small symbolic interpreter over the impl method's `CodeModel` — simulate the operand stack for straight-line code, folding loads/getfields/invokes/arithmetic/boxing into an expression tree, printed as pseudo-source. Bail out on branches or loops and print a summary instead: parameter names + notable calls, e.g. `{ p => … if/loop; calls Validator.check, Map.get }`.
+2. **Body reconstruction** (default): a small symbolic interpreter over the impl method's `CodeModel` — simulate the operand stack for straight-line code, folding loads/getfields/invokes/arithmetic/boxing into an expression tree, printed as pseudo-source. Bail out on branches, loops, stores, or other unhandled shapes and print a compact textified disassembly instead, e.g. `{ n => «bytecode» L0:; ldc 1; istore_1 r; L1:; iload_2 i; ...}` (length-capped) — never a guess at what the branch does, just the honest bytecode.
 3. **Full decompilation** (opt-in flag): delegate the impl method to Vineflower for real decompiled source. Best-in-class library over hand-rolling, but too heavy a dependency to be the default — it's an optional add-on jar.
 
 Most Scala lambdas are single expressions, so tier 2 covers the common case honestly and cheaply; the interpreter refuses to guess rather than print wrong code.
@@ -95,7 +95,7 @@ Demangling is table-driven and tested against classfiles emitted by each compile
 ```
 
 - Origin-only fallback: `PriceEngine.scala:42 PriceEngine.discounted [rate=0.15]`
-- Opaque-body fallback: body replaced by `…` or the call summary.
+- Opaque-body fallback: body replaced by `…` or a textified-bytecode disassembly.
 - Total length capped (configurable, default ~200 chars) — debugger variable panes truncate anyway.
 - The default identity hash is preserved in tier-0 fallback so nothing gets *worse* than status quo.
 

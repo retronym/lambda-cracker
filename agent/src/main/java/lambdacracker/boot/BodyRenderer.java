@@ -2,11 +2,15 @@ package lambdacracker.boot;
 
 import java.lang.classfile.CodeElement;
 import java.lang.classfile.CodeModel;
+import java.lang.classfile.Instruction;
+import java.lang.classfile.Label;
 import java.lang.classfile.Opcode;
+import java.lang.classfile.instruction.BranchInstruction;
 import java.lang.classfile.instruction.ConstantInstruction;
 import java.lang.classfile.instruction.ConvertInstruction;
 import java.lang.classfile.instruction.ExceptionCatch;
 import java.lang.classfile.instruction.FieldInstruction;
+import java.lang.classfile.instruction.IncrementInstruction;
 import java.lang.classfile.instruction.InvokeDynamicInstruction;
 import java.lang.classfile.instruction.InvokeInstruction;
 import java.lang.classfile.instruction.LabelTarget;
@@ -14,11 +18,14 @@ import java.lang.classfile.instruction.LineNumber;
 import java.lang.classfile.instruction.LoadInstruction;
 import java.lang.classfile.instruction.LocalVariable;
 import java.lang.classfile.instruction.LocalVariableType;
+import java.lang.classfile.instruction.LookupSwitchInstruction;
 import java.lang.classfile.instruction.NewObjectInstruction;
 import java.lang.classfile.instruction.NopInstruction;
 import java.lang.classfile.instruction.OperatorInstruction;
 import java.lang.classfile.instruction.ReturnInstruction;
 import java.lang.classfile.instruction.StackInstruction;
+import java.lang.classfile.instruction.StoreInstruction;
+import java.lang.classfile.instruction.TableSwitchInstruction;
 import java.lang.classfile.instruction.TypeCheckInstruction;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.ConstantDesc;
@@ -26,7 +33,9 @@ import java.lang.constant.MethodTypeDesc;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -66,6 +75,70 @@ final class BodyRenderer {
         } catch (RuntimeException e) { // Bail or a genuine bug: either way, fall back
             return null;
         }
+    }
+
+    /**
+     * Fallback for when {@link #render} bails: a compact disassembly, so the shape that
+     * defeated expression reconstruction (a branch, a loop, a store) is still visible
+     * instead of disappearing behind a generic summary.
+     */
+    static String textify(CodeModel code, Map<Integer, String> slotNames) {
+        try {
+            Map<Label, String> labels = new IdentityHashMap<>();
+            List<String> parts = new ArrayList<>();
+            for (CodeElement e : code.elementList()) {
+                switch (e) {
+                    case LabelTarget lt -> parts.add(labelName(labels, lt.label()) + ":");
+                    case LineNumber ln -> {}
+                    case LocalVariable lv -> {}
+                    case LocalVariableType lvt -> {}
+                    case ExceptionCatch ec -> parts.add("catch " +
+                            ec.catchType().map(ct -> simple(ct.asInternalName())).orElse("any"));
+                    case BranchInstruction b -> parts.add(mnemonic(b.opcode()) + " " + labelName(labels, b.target()));
+                    case LookupSwitchInstruction ls -> parts.add(mnemonic(ls.opcode()) + " (" + ls.cases().size() + " cases)");
+                    case TableSwitchInstruction ts -> parts.add(mnemonic(ts.opcode()) + " (" + (ts.highValue() - ts.lowValue() + 1) + " cases)");
+                    case IncrementInstruction inc -> parts.add("iinc " + slotName(slotNames, inc.slot()) + " "
+                            + (inc.constant() >= 0 ? "+" : "") + inc.constant());
+                    case LoadInstruction l -> parts.add(mnemonic(l.opcode()) + " " + slotName(slotNames, l.slot()));
+                    case StoreInstruction s -> parts.add(mnemonic(s.opcode()) + " " + slotName(slotNames, s.slot()));
+                    case FieldInstruction f -> parts.add(mnemonic(f.opcode()) + " "
+                            + simple(f.owner().asInternalName()) + "." + f.name().stringValue());
+                    case InvokeInstruction inv -> parts.add(mnemonic(inv.opcode()) + " "
+                            + simple(inv.owner().asInternalName()) + "." + inv.name().stringValue());
+                    case InvokeDynamicInstruction id -> parts.add("invokedynamic " + id.name().stringValue());
+                    case ConstantInstruction c -> parts.add("ldc " + literal(c.constantValue()));
+                    case NewObjectInstruction n -> parts.add("new " + simple(n.className().asInternalName()));
+                    case TypeCheckInstruction tc -> parts.add(mnemonic(tc.opcode()) + " " + simple(tc.type().asInternalName()));
+                    case Instruction ins -> parts.add(mnemonic(ins.opcode()));
+                    default -> {} // other pseudo-instructions (character ranges, ...): skip
+                }
+            }
+            return String.join("; ", parts);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static String labelName(Map<Label, String> labels, Label l) {
+        return labels.computeIfAbsent(l, k -> "L" + labels.size());
+    }
+
+    private static String slotName(Map<Integer, String> slotNames, int slot) {
+        String n = slotNames.get(slot);
+        return n != null ? n : "v" + slot;
+    }
+
+    private static String mnemonic(Opcode op) {
+        return op.name().toLowerCase(Locale.ROOT);
+    }
+
+    private static String literal(ConstantDesc v) {
+        return switch (v) {
+            case null -> "null";
+            case String s -> quote(s);
+            case ClassDesc cd -> simple(cd.displayName()) + ".class";
+            default -> String.valueOf(v);
+        };
     }
 
     private String run() {
