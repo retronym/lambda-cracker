@@ -10,19 +10,39 @@ import java.lang.classfile.MethodModel;
 import java.lang.classfile.instruction.LineNumber;
 import java.lang.classfile.instruction.LocalVariable;
 import java.lang.constant.MethodTypeDesc;
+import java.lang.invoke.MethodHandleInfo;
+import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.AccessFlag;
 import java.lang.reflect.Field;
+import java.lang.reflect.InaccessibleObjectException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Target of the injected {@code toString()}. Everything expensive — locating and parsing
- * the classfile that hosts the lambda's implementation method — happens on first render
- * and is cached per lambda class. Captured values are read per call. Never throws.
+ * Two entry points into the same analysis engine, sharing one cache keyed by lambda class
+ * (the "lambda site" — every instance from the same call site shares a class; only captured
+ * values differ):
+ *
+ * <ul>
+ *   <li>{@link #render}: target of the agent's injected {@code toString()}. The impl-method
+ *       coordinates ({@code meta}) were extracted from the proxy's classfile at spin time,
+ *       before it became a hidden class no reflection could reach again.
+ *   <li>{@link #describe}: library-mode entry point, no agent required. Impl-method
+ *       coordinates come from {@link SerializedLambda} instead, via the lambda's own
+ *       {@code writeReplace()} — which only exists if its functional interface is
+ *       {@code Serializable}. Every Scala {@code FunctionN} is, by language design; a Java
+ *       lambda needs an explicit {@code (Foo & Serializable)} cast.
+ * </ul>
+ *
+ * Everything expensive — locating and parsing the classfile that hosts the lambda's
+ * implementation method, reconstructing its body — happens once per lambda class and is
+ * cached. Captured values are read fresh on every call. Never throws.
  */
 public final class LambdaCrackerRuntime {
     private LambdaCrackerRuntime() {}
@@ -35,46 +55,131 @@ public final class LambdaCrackerRuntime {
 
     public static String render(Object lambda, String meta) {
         int[] depth = DEPTH.get();
-        if (depth[0] >= 3) return fallback(lambda); // captured lambdas rendering captured lambdas
+        if (depth[0] >= 3) return fallbackText(lambda); // captured lambdas rendering captured lambdas
         depth[0]++;
         try {
             return CACHE.computeIfAbsent(lambda.getClass(), c -> Description.compute(c, meta)).render(lambda);
         } catch (Throwable t) {
-            return fallback(lambda);
+            return fallbackText(lambda);
         } finally {
             depth[0]--;
         }
     }
 
-    private static String fallback(Object o) {
+    /**
+     * Library-mode introspection: no agent, no rewritten {@code toString}. Works for any
+     * lambda whose functional interface is {@code Serializable} (every Scala lambda; a Java
+     * lambda cast to {@code (Foo & Serializable)}); anything else degrades to
+     * {@link LambdaInfo#resolved} {@code == false}, matching the JDK-default-shaped fallback.
+     */
+    public static LambdaInfo describe(Object lambda) {
+        int[] depth = DEPTH.get();
+        if (depth[0] >= 3) return unresolved(lambda);
+        depth[0]++;
+        try {
+            SerializedLambda sl = serialize(lambda);
+            if (sl == null) return unresolved(lambda);
+            Description d = CACHE.computeIfAbsent(lambda.getClass(), c -> Description.compute(c, metaOf(sl)));
+            return d.describe(capturesFromSerialized(d, sl));
+        } catch (Throwable t) {
+            return unresolved(lambda);
+        } finally {
+            depth[0]--;
+        }
+    }
+
+    private static SerializedLambda serialize(Object lambda) {
+        try {
+            Method m = lambda.getClass().getDeclaredMethod("writeReplace");
+            m.setAccessible(true);
+            Object replacement = m.invoke(lambda);
+            return replacement instanceof SerializedLambda sl ? sl : null;
+        } catch (ReflectiveOperationException | SecurityException | InaccessibleObjectException e) {
+            return null;
+        }
+    }
+
+    private static String metaOf(SerializedLambda sl) {
+        char kind = switch (sl.getImplMethodKind()) {
+            case MethodHandleInfo.REF_invokeStatic -> 'S';
+            case MethodHandleInfo.REF_invokeInterface -> 'I';
+            case MethodHandleInfo.REF_newInvokeSpecial -> 'N';
+            default -> 'V'; // REF_invokeVirtual, REF_invokeSpecial
+        };
+        return kind + "|" + sl.getImplClass() + "|" + sl.getImplMethodName() + "|" + sl.getImplMethodSignature();
+    }
+
+    private static Map<String, String> capturesFromSerialized(Description d, SerializedLambda sl) {
+        int n = Math.min(sl.getCapturedArgCount(), d.captureNames.length);
+        if (n == 0) return Map.of();
+        Map<String, String> captures = new LinkedHashMap<>();
+        for (int i = 0; i < n; i++) captures.put(d.captureNames[i], valueString(sl.getCapturedArg(i)));
+        return captures;
+    }
+
+    private static String fallbackText(Object o) {
         return o.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(o));
     }
 
+    private static LambdaInfo unresolved(Object lambda) {
+        return new LambdaInfo(false, false, null, -1, null, "", "", fallbackText(lambda), Map.of());
+    }
+
+    private static String valueString(Object value) {
+        try {
+            String s = String.valueOf(value);
+            return s.length() > MAX_VALUE_LEN ? s.substring(0, MAX_VALUE_LEN - 1) + "…" : s;
+        } catch (Throwable t) {
+            return "?";
+        }
+    }
+
     private static final class Description {
-        final String prefix;          // everything except the per-instance captured values
-        final Field[] captureFields;  // arg$1..arg$N, accessible where possible
+        final boolean methodReference;
+        final String sourceFile;      // null unless a lambda body with known source
+        final int line;               // -1 if unknown
+        final String enclosingClass;
+        final String enclosingMethod; // "" for a top-level lambda; "new"/name for a reference
+        final String params;
+        final String body;
+        final Field[] captureFields;  // arg$1..arg$N, accessible where possible (agent path)
         final String[] captureNames;
 
-        private Description(String prefix, Field[] captureFields, String[] captureNames) {
-            this.prefix = prefix;
+        private Description(boolean methodReference, String sourceFile, int line, String enclosingClass,
+                             String enclosingMethod, String params, String body,
+                             Field[] captureFields, String[] captureNames) {
+            this.methodReference = methodReference;
+            this.sourceFile = sourceFile;
+            this.line = line;
+            this.enclosingClass = enclosingClass;
+            this.enclosingMethod = enclosingMethod;
+            this.params = params;
+            this.body = body;
             this.captureFields = captureFields;
             this.captureNames = captureNames;
         }
 
+        LambdaInfo describe(Map<String, String> captures) {
+            return new LambdaInfo(true, methodReference, sourceFile, line, enclosingClass, enclosingMethod,
+                    params, body, captures);
+        }
+
+        /** Agent path: capture values come from the proxy's own {@code arg$N} fields. */
         String render(Object lambda) {
-            if (captureFields.length == 0) return prefix;
-            StringBuilder sb = new StringBuilder(prefix).append(" [");
-            for (int i = 0; i < captureFields.length; i++) {
-                if (i > 0) sb.append(", ");
-                sb.append(captureNames[i]).append('=').append(valueString(captureFields[i], lambda));
-            }
-            return sb.append(']').toString();
+            return describe(captureValues(lambda)).toString();
+        }
+
+        private Map<String, String> captureValues(Object lambda) {
+            if (captureFields.length == 0) return Map.of();
+            Map<String, String> captures = new LinkedHashMap<>();
+            for (int i = 0; i < captureFields.length; i++)
+                captures.put(captureNames[i], valueString(captureFields[i], lambda));
+            return captures;
         }
 
         private static String valueString(Field f, Object lambda) {
             try {
-                String s = String.valueOf(f.get(lambda));
-                return s.length() > MAX_VALUE_LEN ? s.substring(0, MAX_VALUE_LEN - 1) + "…" : s;
+                return LambdaCrackerRuntime.valueString(f.get(lambda));
             } catch (Throwable t) {
                 return "?";
             }
@@ -94,8 +199,8 @@ public final class LambdaCrackerRuntime {
 
             String encl = Demangler.enclosingMethod(implName);
             if (encl == null) { // a method (or constructor) reference, not a lambda body
-                String ref = ownerSimple + "::" + (kind == 'N' ? "new" : implName);
-                return new Description(ref, captures, capNames);
+                String refName = kind == 'N' ? "new" : implName;
+                return new Description(true, null, -1, ownerSimple, refName, "", null, captures, capNames);
             }
 
             String sourceFile = null;
@@ -141,16 +246,8 @@ public final class LambdaCrackerRuntime {
                 }
             }
 
-            StringBuilder p = new StringBuilder();
-            if (sourceFile != null) {
-                p.append(sourceFile);
-                if (line > 0) p.append(':').append(line);
-                p.append(' ');
-            }
-            p.append(ownerSimple);
-            if (!encl.isEmpty()) p.append('.').append(encl);
-            p.append(" { ").append(paramList(lambdaParams)).append(" => ").append(body).append(" }");
-            return new Description(p.toString(), captures, capNames);
+            return new Description(false, sourceFile, line, ownerSimple, encl, paramList(lambdaParams), body,
+                    captures, capNames);
         }
 
         private static ClassModel parseOwner(Class<?> lambdaClass, String owner) {

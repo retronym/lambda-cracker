@@ -1,5 +1,7 @@
 package demo
 
+import lambdacracker.LambdaCracker
+
 class PriceEngine(val label: String, rate: Double):
   def discounted: Double => Double = p => p * (1.0 - rate)
   override def toString = s"PriceEngine($label)"
@@ -38,8 +40,25 @@ object Demo:
       "if/else body — hard case (bails to bytecode)" -> classify,
     )
 
+    def row(desc: String, value: Any): Unit = println(f"  $desc%-64s -> $value")
+
     println("-- Scala 3 --")
-    for (desc, fn) <- cases do println(f"  $desc%-64s -> $fn")
+    for (desc, fn) <- cases do row(desc, fn)
 
     println("-- Java --")
     JavaDemo.run()
+
+    println("-- Library mode (no agent, no rewritten toString) --")
+    // Every Scala FunctionN is Serializable by default, so LambdaCracker.describe works on
+    // plain lambdas with no cast needed — unlike Java, see JavaDemo.
+    val info = LambdaCracker.describe(f)
+    row("LambdaCracker.describe(f), matches the agent's own rendering", info)
+    row("...as a structured object, not just a string",
+      s"enclosingClass=${info.enclosingClass} enclosingMethod=${info.enclosingMethod} " +
+        s"line=${info.line} params=${info.params}")
+
+    def adder(n: Int): Int => Int = x => x + n
+    val add1 = adder(1)
+    val add2 = adder(2)
+    row("same lambda site, first instance (captures n=1)", LambdaCracker.describe(add1))
+    row("same lambda site, second instance (captures n=2)", LambdaCracker.describe(add2))

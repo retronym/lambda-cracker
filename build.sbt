@@ -15,6 +15,7 @@ lazy val agent = (project in file("agent"))
   )
 
 lazy val demo = (project in file("demo"))
+  .dependsOn(agent) // library mode: lambdacracker.LambdaCracker used directly, no agent required
   .settings(
     name := "lambda-cracker-demo",
     Compile / javacOptions ++= Seq("--release", "25", "-g"),

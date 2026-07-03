@@ -1,5 +1,6 @@
 package demo;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -7,8 +8,14 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import lambdacracker.LambdaCracker;
+import lambdacracker.boot.LambdaInfo;
 
 public class JavaDemo {
+    // Plain java.util.function.Function isn't Serializable; library mode needs writeReplace()
+    // to recover impl-method coordinates without the agent, so it needs this explicit cast.
+    interface SerializableFunction<A, B> extends Function<A, B>, Serializable {}
+
     public static void run() {
         int offset = 7;
         String tag = "prod";
@@ -39,5 +46,14 @@ public class JavaDemo {
 
         for (Map.Entry<String, Object> e : cases.entrySet())
             System.out.printf("  %-64s -> %s%n", e.getKey(), e.getValue());
+
+        System.out.println("-- Library mode (no agent, no rewritten toString) --");
+        SerializableFunction<Integer, Integer> serializableAdd = x -> x + offset;
+        LambdaInfo info = LambdaCracker.describe(serializableAdd);
+        System.out.printf("  %-64s -> %s%n", "LambdaCracker.describe on an explicitly Serializable lambda", info);
+
+        LambdaInfo unresolved = LambdaCracker.describe(add); // 'add' above is a plain, non-Serializable Function
+        System.out.printf("  %-64s -> %s (resolved=%s)%n",
+                "non-Serializable lambda degrades gracefully, no crash", unresolved, unresolved.resolved());
     }
 }

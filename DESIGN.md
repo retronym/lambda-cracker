@@ -1,6 +1,6 @@
 # lambda-cracker — design
 
-A `-javaagent` that gives JVM lambdas a useful `toString`: where the lambda was born (source file, line, enclosing method) and what it does (a compact rendering of its implementation method, recovered from the classfile), plus its captured state.
+A tool that gives JVM lambdas a useful `toString`: where the lambda was born (source file, line, enclosing method) and what it does (a compact rendering of its implementation method, recovered from the classfile), plus its captured state. Two deployment modes share one analysis engine: a `-javaagent` that rewrites every lambda's `toString` in place, and a plain library call (`LambdaCracker.describe(lambda)`) that returns the same information as a structured, introspectable object — no agent, no bytecode rewriting.
 
 ## Problem
 
@@ -29,6 +29,7 @@ Because `toString` is the universal rendering hook, this improves debuggers, log
 - Origin (file:line, enclosing class/method) is always available; body rendering and captured state are best-effort with graceful fallback.
 - Near-zero steady-state overhead: all cost is at lambda class spin time (one injected method + one string field) and lazily on first `toString` call, cached per class.
 - Never break the app: rendering failures fall back to something at least as good as the default string.
+- Usable without an agent: the same analysis, returned as data, for callers who want to introspect a specific lambda rather than instrument every `toString` in the JVM.
 
 **Non-goals**
 - Perfect decompilation. The body rendering is a debugging aid, not source recovery.
@@ -87,6 +88,18 @@ The impl method name is the origin key and needs per-compiler demangling:
 - Specialized interfaces (`JFunction1$mcDD$sp` etc.) and `LambdaDeserialize`-spun instances go through the same spinner — covered for free, but the demangler must strip specialization suffixes when naming the functional interface.
 
 Demangling is table-driven and tested against classfiles emitted by each compiler version, not regex-and-hope.
+
+### 6. Library mode: same engine, a different way to find the impl method
+
+`LambdaCracker.describe(Object lambda)` (`lambdacracker.LambdaCracker`, a plain classpath dependency, no `-javaagent`) returns a `LambdaInfo` record exposing the same fields the agent renders into a string — source file, line, enclosing class/method, params, body, captures — plus a `toString()` that matches the agent's format exactly, since both call into the same `LambdaCrackerRuntime`/`Description` engine underneath.
+
+The two modes differ only in how they learn the impl method's coordinates (owner/name/descriptor), because that's the one piece of information the agent gets for free at spin time (from the about-to-be-hidden proxy's own bytecode) that's otherwise unrecoverable — hidden classes have no retrievable bytes once defined, and there's no supported reflective API to ask an arbitrary lambda instance what it delegates to.
+
+The one other channel the JDK exposes is `java.lang.invoke.SerializedLambda`: if a lambda's functional interface is `Serializable`, its proxy class carries a synthetic `writeReplace()` that hands back a `SerializedLambda` with exactly the coordinates we need (`getImplClass`/`getImplMethodName`/`getImplMethodSignature`/`getImplMethodKind`), plus the captured arguments themselves — no `arg$N` field reflection required. Every Scala `FunctionN` is `Serializable` by design, so this covers Scala lambdas for free; a Java lambda needs an explicit `(Foo & Serializable)` cast, since `java.util.function.*` isn't `Serializable` by default. Lambdas that aren't serializable can't be introspected this way at all without the agent — `describe` degrades to `LambdaInfo.resolved() == false` with a JDK-default-shaped fallback string, the same invariant as the agent's own tier-0 fallback.
+
+One consequence worth calling out: javac hardens serializable-lambda impl-method names against deserialization-gadget forgery by embedding a content hash (`lambda$run$ccaa6a4a$1` instead of `lambda$run$0`); the demangler strips that hash segment specifically for the `lambda$` naming scheme, since it's only ever present on the serializable path library mode depends on.
+
+Both entry points share one cache keyed by lambda class (`ConcurrentHashMap<Class<?>, Description>`), so calling `describe` repeatedly for lambdas from the same call site only re-reads captured values — the classfile parsing and body reconstruction happen once per site, exactly as for the agent's injected `toString`.
 
 ## Rendering format
 
