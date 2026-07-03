@@ -23,6 +23,34 @@ definer, since lambda proxies are hidden classes and never reach a
 `ClassFileTransformer`), the rendering tiers, and the phase plan. This repo is at
 Phase 1: origin + best-effort body reconstruction, no decompiler yet.
 
+## ⚠️ Dev/debug use only — do not run this in production
+
+- **It leaks source.** The rendered body is reconstructed from your actual bytecode —
+  literals, string concatenations, field/method names, and (for the agent path) captured
+  values all show up in the `toString`. Anything a lambda closes over — a password, a
+  token, a customer record — can end up in a log line, a crash report, or a debugger
+  screenshot that leaves your control. Don't attach the agent to a process handling
+  sensitive data.
+- **It's slower than the default `toString`.** Body reconstruction and classfile parsing
+  are cached per lambda class, but the first call per site pays real cost (parsing the
+  owner's classfile, walking the impl method's bytecode), and every call still does
+  reflection to read captured values. Fine for a debugging session; not something to leave
+  wired into a hot logging path.
+- **It changes lambda `toString()` output for every lambda in the JVM, with no opt-out
+  yet.** Code (yours or a dependency's) that pattern-matches, truncates, or otherwise
+  depends on the default `Object@hash` shape — including test assertions and golden files
+  — can break. DESIGN.md's "Configuration" section plans package filters and a kill switch
+  for this; neither is implemented yet, so today the only mitigation is not attaching the
+  agent to that process.
+- **Retransforming `java.lang.invoke.MethodHandles$Lookup` at startup** touches JDK
+  internals via `Instrumentation`. It's designed to degrade safely (any failure falls back
+  to the default string, never crashes the app), but it's still reaching into machinery
+  every lambda in the process depends on.
+
+None of this applies to normal `LambdaCracker.describe(lambda)` [library mode](#library-mode)
+calls beyond the source-leaking and cost concerns above — it doesn't touch JVM-wide
+`toString` behavior at all, since it only inspects the one lambda you hand it.
+
 ## Try it
 
 ```
