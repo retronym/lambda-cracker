@@ -22,9 +22,21 @@ object Demo:
       val doubled = x * 2
       doubled + offset
 
+    val cases = List(
+      "single-expression closure over a local val" -> f,
+      "two-arg lambda, arithmetic body" -> g,
+      "boolean-returning predicate (comparison bails to call summary)" -> pred,
+      "string interpolation body" -> greet,
+      "zero-arg supplier" -> thunk,
+      "Runnable / side-effecting lambda" -> effect,
+      "instance method turned into a function value" -> h,
+      "curried lambda, outer function" -> nested,
+      "curried lambda, applied once (captures x=1)" -> nested(1),
+      "multi-statement body (bails to call summary)" -> multiStatement,
+    )
+
     println("-- Scala 3 --")
-    for fn <- List(f, g, pred, greet, thunk, effect, h, nested, nested(1), multiStatement) do
-      println(s"  $fn")
+    for (desc, fn) <- cases do println(f"  $desc%-64s -> $fn")
 
     println("-- Java --")
     JavaDemo.run()

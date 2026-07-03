@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Regenerates the "Example output" section of README.md from a live run of the demo app,
+# so the README never drifts from what the agent actually renders.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+raw=$(sbt -batch demo/run 2>&1)
+
+# sbt echoes the forked process's stdout with an "[info] " prefix and its own build
+# chatter under other tags (info for compile steps, error for the fork's stderr, success
+# for the timing line) — strip the prefix, then start at the demo's own first line.
+output=$(printf '%s\n' "$raw" | sed -n 's/^\[info\] //p' | awk '/^-- /{f=1} f')
+
+if [ -z "$output" ]; then
+  echo "update-readme: no demo output captured — sbt run may have failed:" >&2
+  printf '%s\n' "$raw" >&2
+  exit 1
+fi
+
+OUTPUT="$output" python3 - <<'PY'
+import os, re, pathlib
+
+output = os.environ["OUTPUT"]
+readme = pathlib.Path("README.md")
+text = readme.read_text()
+block = "<!-- DEMO_OUTPUT:START -->\n```\n" + output + "\n```\n<!-- DEMO_OUTPUT:END -->"
+new_text, n = re.subn(
+    r"<!-- DEMO_OUTPUT:START -->.*<!-- DEMO_OUTPUT:END -->",
+    lambda _: block,
+    text,
+    flags=re.DOTALL,
+)
+if n == 0:
+    raise SystemExit("update-readme: README.md is missing the DEMO_OUTPUT markers")
+readme.write_text(new_text)
+PY
+
+echo "README.md updated with latest demo output."

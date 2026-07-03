@@ -1,6 +1,8 @@
 package demo;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -19,7 +21,17 @@ public class JavaDemo {
         Supplier<ArrayList<String>> ctor = ArrayList::new;
         Runnable multi = () -> { int a = offset * 2; System.out.println(a); };
 
-        for (Object fn : new Object[]{add, longish, constant, label, ref, max, ctor, multi})
-            System.out.println("  " + fn);
+        Map<String, Object> cases = new LinkedHashMap<>();
+        cases.put("single-expression closure over a local variable", add);
+        cases.put("boolean predicate (comparison bails to call summary)", longish);
+        cases.put("zero-arg supplier, constant body", constant);
+        cases.put("closure over a local variable, string concat", label);
+        cases.put("unbound instance method reference", ref);
+        cases.put("static method reference", max);
+        cases.put("constructor reference", ctor);
+        cases.put("multi-statement Runnable (bails to call summary)", multi);
+
+        for (Map.Entry<String, Object> e : cases.entrySet())
+            System.out.printf("  %-64s -> %s%n", e.getKey(), e.getValue());
     }
 }
