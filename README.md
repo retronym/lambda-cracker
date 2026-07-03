@@ -1,5 +1,7 @@
 # lambda-cracker
 
+[Releases](https://github.com/retronym/lambda-cracker/releases) · [Apache License 2.0](LICENSE)
+
 A `-javaagent` that gives JVM lambdas a useful `toString`: where the lambda was born
 (source file, line, enclosing method), what it does (a compact rendering of its
 implementation method, recovered from the classfile), and its captured state — turning
@@ -65,3 +67,7 @@ Regenerate this section after touching the agent or the demo with:
   loop body — hard case (bails to bytecode)                        -> JavaDemo.java:24 JavaDemo.run { n => «bytecode» L0:; ldc 1; istore_1 r; L1:; ldc 2; istore_2 i; L2:; iload_2 i; aload_0 n; invokevirtual Integer.intValue; if_icmpgt L3; iload_1 r; iload_2 i; imul; istore_1 r… }
 ```
 <!-- DEMO_OUTPUT:END -->
+
+## License
+
+[Apache License 2.0](LICENSE).
