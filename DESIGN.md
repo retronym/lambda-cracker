@@ -91,7 +91,7 @@ Demangling is table-driven and tested against classfiles emitted by each compile
 
 ### 6. Library mode: same engine, a different way to find the impl method
 
-`LambdaCracker.describe(Object lambda)` (`lambdacracker.LambdaCracker`, a plain classpath dependency, no `-javaagent`) returns a `LambdaInfo` record exposing the same fields the agent renders into a string — source file, line, enclosing class/method, params, body, captures — plus a `toString()` that matches the agent's format exactly, since both call into the same `LambdaCrackerRuntime`/`Description` engine underneath.
+`LambdaCracker.describe(Object lambda)` (`io.github.retronym.lambdacracker.LambdaCracker`, a plain classpath dependency, no `-javaagent`) returns a `LambdaInfo` record exposing the same fields the agent renders into a string — source file, line, enclosing class/method, params, body, captures — plus a `toString()` that matches the agent's format exactly, since both call into the same `LambdaCrackerRuntime`/`Description` engine underneath.
 
 The two modes differ only in how they learn the impl method's coordinates (owner/name/descriptor), because that's the one piece of information the agent gets for free at spin time (from the about-to-be-hidden proxy's own bytecode) that's otherwise unrecoverable — hidden classes have no retrievable bytes once defined, and there's no supported reflective API to ask an arbitrary lambda instance what it delegates to.
 

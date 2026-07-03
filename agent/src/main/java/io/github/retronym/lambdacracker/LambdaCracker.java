@@ -1,7 +1,7 @@
-package lambdacracker;
+package io.github.retronym.lambdacracker;
 
-import lambdacracker.boot.LambdaCrackerRuntime;
-import lambdacracker.boot.LambdaInfo;
+import io.github.retronym.lambdacracker.boot.LambdaCrackerRuntime;
+import io.github.retronym.lambdacracker.boot.LambdaInfo;
 
 /**
  * Library-mode entry point: add this jar as a plain dependency (no {@code -javaagent}, no

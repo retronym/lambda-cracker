@@ -1,4 +1,4 @@
-package lambdacracker.boot;
+package io.github.retronym.lambdacracker.boot;
 
 /**
  * Maps implementation-method names back to the enclosing method the lambda was written in.

@@ -1,4 +1,4 @@
-package lambdacracker.boot;
+package io.github.retronym.lambdacracker.boot;
 
 import java.util.Map;
 

@@ -1,4 +1,4 @@
-package lambdacracker;
+package io.github.retronym.lambdacracker;
 
 import java.lang.classfile.ClassFile;
 import java.lang.classfile.ClassHierarchyResolver;
@@ -26,7 +26,7 @@ final class LookupInjector implements ClassFileTransformer {
     volatile Throwable failure;
 
     private static final String TARGET = "java/lang/invoke/MethodHandles$Lookup";
-    private static final ClassDesc CD_HOOK = ClassDesc.of("lambdacracker.boot.LambdaCrackerHook");
+    private static final ClassDesc CD_HOOK = ClassDesc.of("io.github.retronym.lambdacracker.boot.LambdaCrackerHook");
     private static final MethodTypeDesc MTD_AUGMENT = MethodTypeDesc.ofDescriptor("([B)[B");
 
     @Override

@@ -1,4 +1,4 @@
-package lambdacracker.boot;
+package io.github.retronym.lambdacracker.boot;
 
 import java.lang.classfile.ClassFile;
 import java.lang.classfile.ClassModel;
@@ -22,7 +22,7 @@ public final class LambdaCrackerHook {
     private LambdaCrackerHook() {}
 
     private static final ThreadLocal<Boolean> BUSY = new ThreadLocal<>();
-    private static final ClassDesc CD_RUNTIME = ClassDesc.of("lambdacracker.boot.LambdaCrackerRuntime");
+    private static final ClassDesc CD_RUNTIME = ClassDesc.of("io.github.retronym.lambdacracker.boot.LambdaCrackerRuntime");
     private static final MethodTypeDesc MTD_TO_STRING = MethodTypeDesc.ofDescriptor("()Ljava/lang/String;");
     private static final MethodTypeDesc MTD_RENDER =
             MethodTypeDesc.ofDescriptor("(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/String;");

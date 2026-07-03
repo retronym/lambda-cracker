@@ -1,6 +1,6 @@
 package demo
 
-import lambdacracker.LambdaCracker
+import io.github.retronym.lambdacracker.LambdaCracker
 
 class PriceEngine(val label: String, rate: Double):
   def discounted: Double => Double = p => p * (1.0 - rate)

@@ -8,8 +8,8 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import lambdacracker.LambdaCracker;
-import lambdacracker.boot.LambdaInfo;
+import io.github.retronym.lambdacracker.LambdaCracker;
+import io.github.retronym.lambdacracker.boot.LambdaInfo;
 
 public class JavaDemo {
     // Plain java.util.function.Function isn't Serializable; library mode needs writeReplace()
