@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.IntFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import io.github.retronym.lambdacracker.LambdaCracker;
@@ -15,6 +16,13 @@ public class JavaDemo {
     // Plain java.util.function.Function isn't Serializable; library mode needs writeReplace()
     // to recover impl-method coordinates without the agent, so it needs this explicit cast.
     interface SerializableFunction<A, B> extends Function<A, B>, Serializable {}
+
+    static class Greeter {
+        private final String name;
+        Greeter(String name) { this.name = name; }
+        String greet(String salutation) { return salutation + ", " + name + "!"; }
+        @Override public String toString() { return "Greeter(" + name + ")"; }
+    }
 
     public static void run() {
         int offset = 7;
@@ -55,5 +63,30 @@ public class JavaDemo {
         LambdaInfo unresolved = LambdaCracker.describe(add); // 'add' above is a plain, non-Serializable Function
         System.out.printf("  %-64s -> %s (resolved=%s)%n",
                 "non-Serializable lambda degrades gracefully, no crash", unresolved, unresolved.resolved());
+    }
+
+    /** All four JLS 15.13 method-reference kinds, plus an array constructor reference. */
+    public static void methodReferences() {
+        Greeter ada = new Greeter("Ada");
+
+        Function<Integer, Integer> staticRef = Math::abs;                          // static method
+        Function<String, Integer> unboundOneArg = String::length;                 // unbound instance, receiver is the sole arg
+        BiFunction<String, String, Boolean> unboundTwoArg = String::startsWith;    // unbound instance, receiver + explicit arg
+        Supplier<Integer> boundOnLiteral = "hello"::length;                       // bound instance, literal receiver captured
+        Function<String, String> boundOnObject = ada::greet;                      // bound instance, captures `ada`
+        Supplier<ArrayList<String>> ctorRef = ArrayList::new;                     // constructor
+        IntFunction<int[]> arrayCtorRef = int[]::new;                             // array constructor
+
+        Map<String, Object> cases = new LinkedHashMap<>();
+        cases.put("static method reference (Math::abs)", staticRef);
+        cases.put("unbound instance ref, 1-arg (String::length)", unboundOneArg);
+        cases.put("unbound instance ref, 2-arg (String::startsWith)", unboundTwoArg);
+        cases.put("bound instance ref, literal receiver (\"hello\"::length)", boundOnLiteral);
+        cases.put("bound instance ref, captured receiver (ada::greet)", boundOnObject);
+        cases.put("constructor reference (ArrayList::new)", ctorRef);
+        cases.put("array constructor reference (int[]::new)", arrayCtorRef);
+
+        for (Map.Entry<String, Object> e : cases.entrySet())
+            System.out.printf("  %-58s -> %s%n", e.getKey(), e.getValue());
     }
 }

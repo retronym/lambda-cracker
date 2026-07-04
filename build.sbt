@@ -20,6 +20,9 @@ lazy val demo = (project in file("demo"))
   .settings(
     name := "lambda-cracker-demo",
     Compile / javacOptions ++= Seq("--release", "25", "-g"),
+    // Pin demo/run to the combined Java+Scala app; JavaApp is a second main class
+    // (pure-Java entry point) run explicitly via `demo/runMain demo.JavaApp`.
+    Compile / mainClass := Some("demo.Demo"),
     fork := true,
     run / javaOptions += s"-javaagent:${(agent / Compile / packageBin).value.getAbsolutePath}"
   )

@@ -17,6 +17,19 @@ if [ -z "$output" ]; then
   exit 1
 fi
 
+# JavaApp re-runs the same Java zoo as proof it needs no Scala on the classpath; only its
+# "Method references" section is new content worth including here, so trim to that.
+raw_javaapp=$(sbt -batch 'demo/runMain demo.JavaApp' 2>&1)
+output_javaapp=$(printf '%s\n' "$raw_javaapp" | sed -n 's/^\[info\] //p' | awk '/^-- Method references/{f=1} f')
+
+if [ -z "$output_javaapp" ]; then
+  echo "update-readme: no JavaApp output captured — sbt runMain may have failed:" >&2
+  printf '%s\n' "$raw_javaapp" >&2
+  exit 1
+fi
+
+output="$output"$'\n'"$output_javaapp"
+
 OUTPUT="$output" python3 - <<'PY'
 import os, re, pathlib
 

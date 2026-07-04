@@ -61,6 +61,14 @@ builds the agent, attaches it to a small demo app via `-javaagent`, and prints a
 of Java and Scala lambdas — closures, method/constructor references, curried and
 multi-statement bodies — labeled with what each one is demonstrating.
 
+```
+sbt "demo/runMain demo.JavaApp"
+```
+
+runs a pure-Java entry point (no Scala class on the call path) that exercises the same
+Java lambda zoo plus a dedicated tour of every JLS 15.13 method-reference kind — static,
+unbound instance, bound instance, constructor, array constructor.
+
 ## Library mode
 
 No agent, no rewritten `toString`: add the agent jar as a plain dependency and call
@@ -107,23 +115,31 @@ Regenerate this section after touching the agent or the demo with:
   multi-statement body (bails to bytecode)                         -> Demo.scala:24 Demo { x => «bytecode» L0:; iload_1 x; ldc 2; imul; istore_2 doubled; L1:; iload_2 doubled; iload_0 offset$1; iadd; ireturn; L2: } [offset$1=7]
   if/else body — hard case (bails to bytecode)                     -> Demo.scala:27 Demo { s => «bytecode» L0:; aload_0 s; invokevirtual String.isEmpty; ifeq L1; ldc "empty"; areturn; L1:; ldc "non-empty"; areturn; L2: }
 -- Java --
-  single-expression closure over a local variable                  -> JavaDemo.java:22 JavaDemo.run { x => x + offset } [offset=7]
-  boolean predicate (comparison bails to bytecode)                 -> JavaDemo.java:23 JavaDemo.run { s => «bytecode» L0:; aload_0 s; invokevirtual String.length; ldc 3; if_icmple L1; ldc 1; goto L2; L1:; ldc 0; L2:; ireturn; L3: }
-  zero-arg supplier, constant body                                 -> JavaDemo.java:24 JavaDemo.run { () => "constant" }
-  closure over a local variable, string concat                     -> JavaDemo.java:25 JavaDemo.run { s => tag + ":" + s } [tag=prod]
+  single-expression closure over a local variable                  -> JavaDemo.java:30 JavaDemo.run { x => x + offset } [offset=7]
+  boolean predicate (comparison bails to bytecode)                 -> JavaDemo.java:31 JavaDemo.run { s => «bytecode» L0:; aload_0 s; invokevirtual String.length; ldc 3; if_icmple L1; ldc 1; goto L2; L1:; ldc 0; L2:; ireturn; L3: }
+  zero-arg supplier, constant body                                 -> JavaDemo.java:32 JavaDemo.run { () => "constant" }
+  closure over a local variable, string concat                     -> JavaDemo.java:33 JavaDemo.run { s => tag + ":" + s } [tag=prod]
   unbound instance method reference                                -> String::length
-  static method reference                                          -> Number::intValue
+  static method reference                                          -> Math::max
   constructor reference                                            -> ArrayList::new
-  multi-statement Runnable (bails to bytecode)                     -> JavaDemo.java:29 JavaDemo.run { () => «bytecode» L0:; iload_0 offset; ldc 2; imul; istore_1 a; L1:; getstatic System.out; iload_1 a; invokevirtual PrintStream.println; return; L2: } [offset=7]
-  loop body — hard case (bails to bytecode)                        -> JavaDemo.java:31 JavaDemo.run { n => «bytecode» L0:; ldc 1; istore_1 r; L1:; ldc 2; istore_2 i; L2:; iload_2 i; aload_0 n; invokevirtual Integer.intValue; if_icmpgt L3; iload_1 r; iload_2 i; imul; istore_1 r… }
+  multi-statement Runnable (bails to bytecode)                     -> JavaDemo.java:37 JavaDemo.run { () => «bytecode» L0:; iload_0 offset; ldc 2; imul; istore_1 a; L1:; getstatic System.out; iload_1 a; invokevirtual PrintStream.println; return; L2: } [offset=7]
+  loop body — hard case (bails to bytecode)                        -> JavaDemo.java:39 JavaDemo.run { n => «bytecode» L0:; ldc 1; istore_1 r; L1:; ldc 2; istore_2 i; L2:; iload_2 i; aload_0 n; invokevirtual Integer.intValue; if_icmpgt L3; iload_1 r; iload_2 i; imul; istore_1 r… }
 -- Library mode (no agent, no rewritten toString) --
-  LambdaCracker.describe on an explicitly Serializable lambda      -> JavaDemo.java:51 JavaDemo.run { x => x + offset } [offset=7]
-  non-Serializable lambda degrades gracefully, no crash            -> demo.JavaDemo$$Lambda/0x00000c00010bda80@1efed156 (resolved=false)
+  LambdaCracker.describe on an explicitly Serializable lambda      -> JavaDemo.java:59 JavaDemo.run { x => x + offset } [offset=7]
+  non-Serializable lambda degrades gracefully, no crash            -> demo.JavaDemo$$Lambda/0x000001e0010bda80@1efed156 (resolved=false)
 -- Library mode (no agent, no rewritten toString) --
   LambdaCracker.describe(f), matches the agent's own rendering     -> Demo.scala:14 Demo { p => p * (1.0 - rate$1) } [rate$1=0.15]
   ...as a structured object, not just a string                     -> enclosingClass=Demo enclosingMethod= line=14 params=p
   same lambda site, first instance (captures n=1)                  -> Demo.scala:60 Demo.adder$1 { x => x + n$1 } [n$1=1]
   same lambda site, second instance (captures n=2)                 -> Demo.scala:60 Demo.adder$1 { x => x + n$1 } [n$1=2]
+-- Method references, every JLS 15.13 kind --
+  static method reference (Math::abs)                        -> Math::abs
+  unbound instance ref, 1-arg (String::length)               -> String::length
+  unbound instance ref, 2-arg (String::startsWith)           -> String::startsWith
+  bound instance ref, literal receiver ("hello"::length)     -> String::length [arg$1=hello]
+  bound instance ref, captured receiver (ada::greet)         -> JavaDemo.Greeter::greet [arg$1=Greeter(Ada)]
+  constructor reference (ArrayList::new)                     -> ArrayList::new
+  array constructor reference (int[]::new)                   -> JavaDemo.java:78 JavaDemo.methodReferences { x$0 => «bytecode» L0:; iload_0 x$0; newarray; areturn; L1: }
 ```
 <!-- DEMO_OUTPUT:END -->
 

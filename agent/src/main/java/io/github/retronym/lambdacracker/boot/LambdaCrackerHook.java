@@ -6,6 +6,7 @@ import java.lang.classfile.ClassTransform;
 import java.lang.classfile.CodeElement;
 import java.lang.classfile.CodeModel;
 import java.lang.classfile.MethodModel;
+import java.lang.classfile.Opcode;
 import java.lang.classfile.instruction.InvokeInstruction;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.MethodTypeDesc;
@@ -63,6 +64,13 @@ public final class LambdaCrackerHook {
      * The proxy's forwarding methods contain exactly one interesting invocation: the
      * implementation method the metafactory was given. Constructor references appear as an
      * {@code <init>} invoke on the referenced class.
+     *
+     * <p>A boxed-argument static method reference (e.g. {@code Function<Integer,Integer> f =
+     * Math::abs}) forwards through a metafactory-synthesized unbox-call-rebox sequence, and
+     * that unbox call — unlike javac- or scalac-emitted boxing, which uses the concrete
+     * wrapper type — invokes the generic {@code Number.intValue()} (etc.), not
+     * {@code Integer.intValue()}. Skip it like any other boxing/unboxing call, or it gets
+     * mistaken for the impl method.
      */
     private static String findImplMeta(ClassModel cm) {
         String self = cm.thisClass().asInternalName();
@@ -72,6 +80,7 @@ public final class LambdaCrackerHook {
             if (code == null) continue;
             for (CodeElement e : code.elementList()) {
                 if (!(e instanceof InvokeInstruction inv)) continue;
+                if (isBoxingOrUnboxing(inv)) continue;
                 String owner = inv.owner().asInternalName();
                 if (owner.equals(self) || owner.equals("java/lang/Object")
                         || owner.equals("java/util/Objects") || owner.startsWith("java/lang/invoke/")) continue;
@@ -84,6 +93,32 @@ public final class LambdaCrackerHook {
             }
         }
         return null;
+    }
+
+    private static boolean isBoxingOrUnboxing(InvokeInstruction inv) {
+        String owner = inv.owner().asInternalName();
+        String name = inv.name().stringValue();
+        boolean isStatic = inv.opcode() == Opcode.INVOKESTATIC;
+        int argc = inv.typeSymbol().parameterCount();
+        if (isStatic && argc == 1 && isWrapper(owner) && name.equals("valueOf")) return true;
+        if (!isStatic && argc == 0 && (isWrapper(owner) || owner.equals("java/lang/Number")) && isValueMethod(name)) return true;
+        return false;
+    }
+
+    private static boolean isWrapper(String owner) {
+        return switch (owner) {
+            case "java/lang/Integer", "java/lang/Long", "java/lang/Double", "java/lang/Float",
+                 "java/lang/Short", "java/lang/Byte", "java/lang/Character", "java/lang/Boolean" -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isValueMethod(String name) {
+        return switch (name) {
+            case "intValue", "longValue", "doubleValue", "floatValue", "shortValue", "byteValue",
+                 "booleanValue", "charValue" -> true;
+            default -> false;
+        };
     }
 
     /** Minimal constant-pool walk to read this_class without a full parse. */
