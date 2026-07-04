@@ -1,5 +1,5 @@
 ThisBuild / scalaVersion := "3.7.1"
-ThisBuild / version := "0.2.0"
+ThisBuild / version := "0.3.0"
 
 // Pure-Java agent. Everything reachable from code injected into java.base lives in
 // io.github.retronym.lambdacracker.boot and must have no dependencies beyond java.base itself.

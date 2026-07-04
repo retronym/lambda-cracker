@@ -126,7 +126,7 @@ Regenerate this section after touching the agent or the demo with:
   loop body — hard case (bails to bytecode)                        -> JavaDemo.java:39 JavaDemo.run { n => «bytecode» L0:; ldc 1; istore_1 r; L1:; ldc 2; istore_2 i; L2:; iload_2 i; aload_0 n; invokevirtual Integer.intValue; if_icmpgt L3; iload_1 r; iload_2 i; imul; istore_1 r… }
 -- Library mode (no agent, no rewritten toString) --
   LambdaCracker.describe on an explicitly Serializable lambda      -> JavaDemo.java:59 JavaDemo.run { x => x + offset } [offset=7]
-  non-Serializable lambda degrades gracefully, no crash            -> demo.JavaDemo$$Lambda/0x000001e0010bda80@1efed156 (resolved=false)
+  non-Serializable lambda degrades gracefully, no crash            -> demo.JavaDemo$$Lambda/0x0000007c010bda80@1efed156 (resolved=false)
 -- Library mode (no agent, no rewritten toString) --
   LambdaCracker.describe(f), matches the agent's own rendering     -> Demo.scala:14 Demo { p => p * (1.0 - rate$1) } [rate$1=0.15]
   ...as a structured object, not just a string                     -> enclosingClass=Demo enclosingMethod= line=14 params=p
